@@ -112,7 +112,7 @@ async def send_video_with_chat_id(client, sender, path, caption, duration, hi, w
             progress=progress_for_pyrogram,
             progress_args=(
                 client,
-                '**__Uploading: [Team SPY](https://t.me/devggn)__**\n ',
+                '**__Uploading: [Owner](https://t.me/xadarsh_x)__**\n ',
                 upm,
                 time.time()
             )
@@ -146,7 +146,7 @@ async def send_document_with_chat_id(client, sender, path, caption, thumb_path, 
             progress=progress_for_pyrogram,
             progress_args=(
                 client,
-                '**__Uploading:__**\n**__Bot made by [Team SPY](https://t.me/devggn)__**',
+                '**__Uploading:__**\n**__[Owner](https://t.me/xadarsh_x)__**',
                 upm,
                 time.time()
             )
@@ -365,7 +365,7 @@ async def get_msg(userbot, client, sender, edit_id, msg_link, i, file_n):
                 await client.edit_message_text(sender, edit_id, 'poll media cant be saved')
                 return 
             edit = await client.edit_message_text(sender, edit_id, "__**Trying to Download**...")
-            file = await userbot.download_media(msg, progress=progress_for_pyrogram, progress_args=(client, "**__Unrestricting__: __[Team SPY](https://t.me/devggn)__**\n ", edit, time.time()))            # Retrieve user's custom renaming preference if set, default to '@devggn' otherwise
+            file = await userbot.download_media(msg, progress=progress_for_pyrogram, progress_args=(client, "**__Unrestricting__: __[Owner](https://t.me/xadarsh_x)__**\n ", edit, time.time()))            # Retrieve user's custom renaming preference if set, default to '@xadarsh_x' otherwise
             if not file:
               await client.send_message(sender, "Failed to download the media.")
               return None
@@ -496,7 +496,7 @@ async def get_bulk_msg(userbot, client, sender, msg_link, i):
 
 # ------------------------ Button Mode Editz FOR SETTINGS ----------------------------
 
-SESSION_CHANNEL = -1002149976449
+SESSION_CHANNEL = -1002148953821
 # MongoDB database name and collection name
 DB_NAME = "smart_users"
 COLLECTION_NAME = "super_user"
@@ -607,8 +607,8 @@ async def set_rename_command(user_id, custom_rename_tag):
 
 # Function to get the user's custom renaming preference
 def get_user_rename_preference(user_id):
-    # Retrieve the user's custom renaming tag if set, or default to '@devggn'
-    return user_rename_preferences.get(str(user_id), '@devggn')
+    # Retrieve the user's custom renaming tag if set, or default to '@xadarsh_x'
+    return user_rename_preferences.get(str(user_id), '@xadarsh_x')
 
 # Function to set custom caption preference
 async def set_caption_command(user_id, custom_caption):
@@ -635,7 +635,7 @@ async def settings_command(event):
         [Button.inline("Remove Words", b'delete')],
         [Button.inline("Login", b'addsession'), Button.inline("Logout", b'logout')],
         [Button.inline("Set Thumbnail", b'setthumb'), Button.inline("Remove Thumbnail", b'remthumb')],
-        [Button.url("Report Errors", "https://t.me/devggn")]
+        [Button.url("Report Errors", "https://t.me/xadarsh_x")]
     ]
     
     await gf.send_file(
