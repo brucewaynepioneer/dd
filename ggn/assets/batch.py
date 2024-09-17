@@ -132,7 +132,7 @@ async def _batch(event):
         except Exception as e:
             logger.error(f"An error occurred: {e}")
             await conv.send_message("An error occurred during processing. Please try again later.")
-        finally:
+        try:
             conv.cancel()
             del batch_data[str(user_id)]
             save_batch_data(batch_data)
