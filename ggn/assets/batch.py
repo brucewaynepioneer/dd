@@ -1,3 +1,4 @@
+
 import time
 import os
 import logging
@@ -51,12 +52,6 @@ def load_ids_data():
         return {}
 
 ids_data = load_ids_data()
-
-from pyrogram import Client, filters
-from pyrogram.errors import RPCError
-from your_module import getenv  # Make sure to import getenv or use a suitable method to get environment variables
-
-default_session = getenv("SESSION", "")
 
 @gagan.on(events.NewMessage(incoming=True, pattern='/batch'))
 async def _batch(event):
@@ -132,16 +127,12 @@ async def _batch(event):
         except Exception as e:
             logger.error(f"An error occurred: {e}")
             await conv.send_message("An error occurred during processing. Please try again later.")
-        try:
+        finally:
             conv.cancel()
             del batch_data[str(user_id)]
             save_batch_data(batch_data)
             del ids_data[str(user_id)]
             save_ids_data(ids_data)
-          
-        except Exception as e:
-            logger.info(e)
-            await conv.send_message("Processed")
 
 @gagan.on(events.NewMessage(incoming=True, pattern='/cancel'))
 async def cancel_command(event):
