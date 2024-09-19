@@ -171,61 +171,103 @@ async def send_document_with_chat_id(client, sender, path, caption, thumb_path, 
         await client.send_message(sender, error_message)
         await client.send_message(sender, f"Make Bot admin in your Channel - {chat_id} and restart the process after /cancel")
 
-# Initialize the scheduler
-scheduler = AsyncIOScheduler()
-scheduler.start()
-
-# Use a dictionary instead of a set to store user_id and expiry time
-SUPER_USERS = {}
-
-# Function to remove authorization
-async def remove_authorization(user_id):
-    if user_id in SUPER_USERS:
-        del SUPER_USERS[user_id]
-        print(f"User {user_id}'s authorization has expired.")
-
-# Function to save authorized users (for testing, we'll just print)
 def save_authorized_users(super_users):
-    print("Authorized Users:", super_users)
+    # Save the SUPER_USERS dictionary to a file or database as needed
+    pass
 
-# Function to convert time like '1 day', '2 hours' into seconds
-async def get_seconds(time_str):
-    time_units = time_str.split()
-    time_val = int(time_units[0])
-    time_type = time_units[1].lower()
-
-    if time_type.startswith('day'):
-        return time_val * 86400  # 1 day = 86400 seconds
-    elif time_type.startswith('hour'):
-        return time_val * 3600  # 1 hour = 3600 seconds
-    elif time_type.startswith('minute'):
-        return time_val * 60  # 1 minute = 60 seconds
-    elif time_type.startswith('month'):
-        return time_val * 2592000  # Approx. 1 month = 30 days
-    elif time_type.startswith('year'):
-        return time_val * 31536000  # 1 year = 365 days
-    else:
-        return 0  # Invalid time format
-
-# Function to authorize user with a time frame
+# Function to authorize a user for a specific time frame
 async def authorize_user(user_id, time_frame):
-    # Calculate expiry time
-    seconds = await get_seconds(time_frame)
-    if seconds > 0:
-        expiry_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata")) + timedelta(seconds=seconds)
-        
-        # Add user to SUPER_USERS (use a dictionary instead of a set)
+    try:
+        # Calculate the expiration time based on the time frame
+        current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        time_frame_value, time_frame_unit = time_frame.split(' ')
+        time_frame_value = int(time_frame_value)
+
+        if 'day' in time_frame_unit:
+            expiry_time = current_time + datetime.timedelta(days=time_frame_value)
+        elif 'hour' in time_frame_unit:
+            expiry_time = current_time + datetime.timedelta(hours=time_frame_value)
+        elif 'min' in time_frame_unit:
+            expiry_time = current_time + datetime.timedelta(minutes=time_frame_value)
+        elif 'month' in time_frame_unit:
+            expiry_time = current_time + datetime.timedelta(days=time_frame_value * 30)
+        elif 'year' in time_frame_unit:
+            expiry_time = current_time + datetime.timedelta(days=time_frame_value * 365)
+        else:
+            raise ValueError("Invalid time frame")
+
+        # Add user to the authorized list with the expiry time
         SUPER_USERS[user_id] = expiry_time
         save_authorized_users(SUPER_USERS)
+    except Exception as e:
+        print(f"Error authorizing user: {e}")
 
-        # Schedule de-authorization
-        scheduler.add_job(remove_authorization, 'date', run_date=expiry_time, args=[user_id])
+# Function to de-authorize expired users (run this periodically)
+async def deauthorize_expired_users():
+    current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+    expired_users = [user_id for user_id, expiry in SUPER_USERS.items() if expiry < current_time]
+    for user_id in expired_users:
+        del SUPER_USERS[user_id]
+    save_authorized_users(SUPER_USERS)
 
-        expiry_str = expiry_time.strftime("%d-%m-%Y %I:%M:%S %p %Z")
-        print(f"User {user_id} has been authorized until {expiry_str} (Asia/Kolkata).")
+# Command to authorize users with a time frame
+@gagan.on(events.NewMessage(incoming=True, pattern='/auth'))
+async def _auth(event):
+    """
+    Command to authorize users for a specific time frame.
+    Usage: /auth USER_ID TIME_FRAME (e.g., 1 day, 2 hours, 1 month)
+    """
+    # Check if the command is initiated by the owner
+    if event.sender_id == OWNER_ID:
+        # Parse the user ID and time frame from the command
+        try:
+            # Example: /auth 123456789 1 day
+            command_args = event.message.text.split(' ')
+            user_id = int(command_args[1])
+            time_frame = " ".join(command_args[2:])  # Combining time value and unit (e.g., '1 day')
+        except (ValueError, IndexError):
+            return await event.respond("Invalid /auth command. Use /auth USER_ID TIME_FRAME (e.g., 1 day, 2 hours).")
+
+        # Authorize the user for the given time frame
+        await authorize_user(user_id, time_frame)
+        
+        # Notify the owner that the user has been authorized
+        await event.respond(f"User {user_id} has been authorized for {time_frame}.")
     else:
-        print("Invalid time format. Use '1 day', '2 hours', '1 month', etc.")
+        await event.respond("You are not authorized to use this command.")
 
+# Command to check a user's premium status
+@gagan.on(events.NewMessage(incoming=True, pattern='/check'))
+async def check_user(event):
+    """
+    Command to check the premium status of a user.
+    Usage: /check USER_ID
+    """
+    if event.sender_id == OWNER_ID:
+        try:
+            user_id = int(event.message.text.split(' ')[1])
+        except (ValueError, IndexError):
+            return await event.respond("Invalid /check command. Use /check USER_ID.")
+
+        expiry_time = SUPER_USERS.get(user_id)
+        if expiry_time:
+            current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+            time_left = expiry_time - current_time
+
+            # Calculate days, hours, minutes left
+            days = time_left.days
+            hours, remainder = divmod(time_left.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+
+            await event.respond(f"User {user_id} has {days} days, {hours} hours, {minutes} minutes left.")
+        else:
+            await event.respond(f"User {user_id} is not authorized or their access has expired.")
+    else:
+        await event.respond("You are not authorized to use this command.")
+
+# Periodically run the deauthorize_expired_users function (implement in a scheduler or as a cron job)
+# Example usage:
+# await deauthorize_expired_users()
 
 
 @gagan.on(events.NewMessage(incoming=True, pattern='/clean'))
