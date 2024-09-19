@@ -171,26 +171,24 @@ async def send_document_with_chat_id(client, sender, path, caption, thumb_path, 
         await client.send_message(sender, error_message)
         await client.send_message(sender, f"Make Bot admin in your Channel - {chat_id} and restart the process after /cancel")
 
-# Initialize a scheduler for automatic de-authorization
+# Initialize the scheduler
 scheduler = AsyncIOScheduler()
 scheduler.start()
 
-# Define the SUPER_USERS as a dictionary to store user_id and their expiry time
+# Use a dictionary instead of a set to store user_id and expiry time
 SUPER_USERS = {}
 
-# Function to remove a user after the authorization expires
+# Function to remove authorization
 async def remove_authorization(user_id):
     if user_id in SUPER_USERS:
         del SUPER_USERS[user_id]
-        save_authorized_users(SUPER_USERS)  # Persist updated authorized users
-        print(f"User {user_id}'s authorization has expired.")  # For logging
+        print(f"User {user_id}'s authorization has expired.")
 
-# Function to save authorized users (persist data)
+# Function to save authorized users (for testing, we'll just print)
 def save_authorized_users(super_users):
-    # Implement the actual saving logic (e.g., to a database or file)
-    pass
+    print("Authorized Users:", super_users)
 
-# Function to get seconds from time like "1 day", "2 hours", etc.
+# Function to convert time like '1 day', '2 hours' into seconds
 async def get_seconds(time_str):
     time_units = time_str.split()
     time_val = int(time_units[0])
@@ -209,38 +207,24 @@ async def get_seconds(time_str):
     else:
         return 0  # Invalid time format
 
-@gagan.on(events.NewMessage(incoming=True, pattern='/auth'))
-async def _auth(event):
-    """
-    Command to authorize users for a limited time
-    """
-    if event.sender_id == OWNER_ID:
-        try:
-            # Parse the user ID and time from the command
-            args = event.message.text.split(' ')
-            user_id = int(args[1])
-            time_frame = args[2] + " " + args[3]
-        except (ValueError, IndexError):
-            return await event.respond("Invalid /auth command. Use /auth USER_ID TIME (e.g., 1 day, 2 hours).")
+# Function to authorize user with a time frame
+async def authorize_user(user_id, time_frame):
+    # Calculate expiry time
+    seconds = await get_seconds(time_frame)
+    if seconds > 0:
+        expiry_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata")) + timedelta(seconds=seconds)
+        
+        # Add user to SUPER_USERS (use a dictionary instead of a set)
+        SUPER_USERS[user_id] = expiry_time
+        save_authorized_users(SUPER_USERS)
 
-        # Calculate the expiry time
-        seconds = await get_seconds(time_frame)
-        if seconds > 0:
-            expiry_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata")) + timedelta(seconds=seconds)
-            
-            # Add the user ID and expiry time to the authorized set
-            SUPER_USERS[user_id] = expiry_time
-            save_authorized_users(SUPER_USERS)
+        # Schedule de-authorization
+        scheduler.add_job(remove_authorization, 'date', run_date=expiry_time, args=[user_id])
 
-            # Schedule automatic de-authorization after the specified time
-            scheduler.add_job(remove_authorization, 'date', run_date=expiry_time, args=[user_id])
-
-            expiry_str = expiry_time.strftime("%d-%m-%Y %I:%M:%S %p %Z")
-            await event.respond(f"User {user_id} has been authorized for commands until {expiry_str} (Asia/Kolkata).")
-        else:
-            await event.respond("Invalid time format. Use '1 day', '2 hours', '1 month', etc.")
+        expiry_str = expiry_time.strftime("%d-%m-%Y %I:%M:%S %p %Z")
+        print(f"User {user_id} has been authorized until {expiry_str} (Asia/Kolkata).")
     else:
-        await event.respond("You are not authorized to use this command.")
+        print("Invalid time format. Use '1 day', '2 hours', '1 month', etc.")
 
 
 
