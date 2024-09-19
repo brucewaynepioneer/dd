@@ -1,6 +1,10 @@
 # Join t.me/devgaganin
 
 import re
+from datetime import timedelta
+import pytz
+import datetime
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio, time, os
 import pymongo
 from pyrogram.enums import ParseMode , MessageMediaType
@@ -41,7 +45,7 @@ async def copy_message_with_chat_id(client, sender, chat_id, message_id):
         for word, replace_word in replacements.items():
             final_caption = final_caption.replace(word, replace_word)
         
-        caption = f"{final_caption}\n\n__**{custom_caption}**__" if custom_caption else f"{final_caption}"
+        caption = f"`{final_caption}`\n\n__**`{custom_caption}`**__" if custom_caption else f"`{final_caption}`"
         
         if msg.media:
             if msg.media == MessageMediaType.VIDEO:
@@ -167,26 +171,78 @@ async def send_document_with_chat_id(client, sender, path, caption, thumb_path, 
         await client.send_message(sender, error_message)
         await client.send_message(sender, f"Make Bot admin in your Channel - {chat_id} and restart the process after /cancel")
 
+# Initialize a scheduler for automatic de-authorization
+scheduler = AsyncIOScheduler()
+scheduler.start()
+
+# Define the SUPER_USERS as a dictionary to store user_id and their expiry time
+SUPER_USERS = {}
+
+# Function to remove a user after the authorization expires
+async def remove_authorization(user_id):
+    if user_id in SUPER_USERS:
+        del SUPER_USERS[user_id]
+        save_authorized_users(SUPER_USERS)  # Persist updated authorized users
+        print(f"User {user_id}'s authorization has expired.")  # For logging
+
+# Function to save authorized users (persist data)
+def save_authorized_users(super_users):
+    # Implement the actual saving logic (e.g., to a database or file)
+    pass
+
+# Function to get seconds from time like "1 day", "2 hours", etc.
+async def get_seconds(time_str):
+    time_units = time_str.split()
+    time_val = int(time_units[0])
+    time_type = time_units[1].lower()
+
+    if time_type.startswith('day'):
+        return time_val * 86400  # 1 day = 86400 seconds
+    elif time_type.startswith('hour'):
+        return time_val * 3600  # 1 hour = 3600 seconds
+    elif time_type.startswith('minute'):
+        return time_val * 60  # 1 minute = 60 seconds
+    elif time_type.startswith('month'):
+        return time_val * 2592000  # Approx. 1 month = 30 days
+    elif time_type.startswith('year'):
+        return time_val * 31536000  # 1 year = 365 days
+    else:
+        return 0  # Invalid time format
 
 @gagan.on(events.NewMessage(incoming=True, pattern='/auth'))
 async def _auth(event):
     """
-    Command to authorize users
+    Command to authorize users for a limited time
     """
-    # Check if the command is initiated by the owner
     if event.sender_id == OWNER_ID:
-        # Parse the user ID from the command
         try:
-            user_id = int(event.message.text.split(' ')[1])
+            # Parse the user ID and time from the command
+            args = event.message.text.split(' ')
+            user_id = int(args[1])
+            time_frame = args[2] + " " + args[3]
         except (ValueError, IndexError):
-            return await event.respond("Invalid /auth command. Use /auth USER_ID.")
+            return await event.respond("Invalid /auth command. Use /auth USER_ID TIME (e.g., 1 day, 2 hours).")
 
-        #Add the user ID to the authorized set
-        SUPER_USERS.add(user_id)
-        save_authorized_users(SUPER_USERS)
-        await event.respond(f"User {user_id} has been authorized for commands.")
+        # Calculate the expiry time
+        seconds = await get_seconds(time_frame)
+        if seconds > 0:
+            expiry_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata")) + timedelta(seconds=seconds)
+            
+            # Add the user ID and expiry time to the authorized set
+            SUPER_USERS[user_id] = expiry_time
+            save_authorized_users(SUPER_USERS)
+
+            # Schedule automatic de-authorization after the specified time
+            scheduler.add_job(remove_authorization, 'date', run_date=expiry_time, args=[user_id])
+
+            expiry_str = expiry_time.strftime("%d-%m-%Y %I:%M:%S %p %Z")
+            await event.respond(f"User {user_id} has been authorized for commands until {expiry_str} (Asia/Kolkata).")
+        else:
+            await event.respond("Invalid time format. Use '1 day', '2 hours', '1 month', etc.")
     else:
         await event.respond("You are not authorized to use this command.")
+
+
 
 @gagan.on(events.NewMessage(incoming=True, pattern='/clean'))
 async def clear_all_delete_words_command_handler(event):
@@ -432,7 +488,7 @@ async def get_msg(userbot, client, sender, edit_id, msg_link, i, file_n):
                 replacements = load_replacement_words(sender)
                 for word, replace_word in replacements.items():
                     final_caption = final_caption.replace(word, replace_word)
-                caption = f"{final_caption}\n\n__**{custom_caption}**__" if custom_caption else f"{final_caption}"
+                caption = f"`{final_caption}`\n\n__**`{custom_caption}`**__" if custom_caption else f"`{final_caption}`"
                 await send_video_with_chat_id(client, sender, path, caption, duration, hi, wi, thumb_path, upm, msg.pinned_message)
             elif str(file).split(".")[-1] in ['jpg', 'jpeg', 'png', 'webp']:
                 if file_n != '':
@@ -471,7 +527,7 @@ async def get_msg(userbot, client, sender, edit_id, msg_link, i, file_n):
                 replacements = load_replacement_words(sender)
                 for word, replace_word in replacements.items():
                     final_caption = final_caption.replace(word, replace_word)
-                caption = f"{final_caption}\n\n__**{custom_caption}**__" if custom_caption else f"{final_caption}"
+                caption = f"`{final_caption}`\n\n__**`{custom_caption}`**__" if custom_caption else f"`{final_caption}`"
                 await send_document_with_chat_id(client, sender, path, caption, thumb_path, upm, msg.pinned_message)
                     
             os.remove(file)
